@@ -78,6 +78,49 @@
       color: var(--dim);
       font-size: 12px;
     }
+    .touch-controls {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: flex-end;
+      justify-content: space-between;
+      padding: 18px;
+      pointer-events: none;
+    }
+    .touch-group {
+      display: grid;
+      gap: 10px;
+      pointer-events: auto;
+    }
+    .touch-btn {
+      width: 68px;
+      height: 68px;
+      border: 1px solid rgba(255,255,255,0.5);
+      background: rgba(0,0,0,0.6);
+      color: var(--fg);
+      font-family: inherit;
+      font-size: 18px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      user-select: none;
+      touch-action: none;
+    }
+    .touch-btn:active {
+      background: rgba(255,255,255,0.15);
+      border-color: rgba(255,255,255,0.85);
+    }
+    .touch-center {
+      align-self: flex-end;
+      pointer-events: auto;
+    }
+    @media (pointer: coarse) {
+      .touch-controls {
+        display: flex;
+      }
+    }
   </style>
 </head>
 <body>
@@ -87,6 +130,17 @@
       <div class="panel" id="panel-left"></div>
       <div class="panel-right" id="panel-right"></div>
       <div class="center-msg" id="center-msg"></div>
+      <div class="touch-controls" id="touch-controls">
+        <div class="touch-group">
+          <button class="touch-btn" id="btn-left">◀</button>
+        </div>
+        <div class="touch-center">
+          <button class="touch-btn" id="btn-thrust">THRUST</button>
+        </div>
+        <div class="touch-group">
+          <button class="touch-btn" id="btn-right">▶</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -432,6 +486,24 @@ VERTICAL SPEED     ${Math.abs(vSpeed)} ${vSpeed < 0 ? "^" : "v"}`;
 
     window.addEventListener("resize", resize);
 
+    function bindTouchButton(id, code) {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+      const press = (e) => {
+        e.preventDefault();
+        state.keys.add(code);
+        btn.setPointerCapture?.(e.pointerId);
+      };
+      const release = (e) => {
+        e.preventDefault();
+        state.keys.delete(code);
+      };
+      btn.addEventListener("pointerdown", press);
+      btn.addEventListener("pointerup", release);
+      btn.addEventListener("pointercancel", release);
+      btn.addEventListener("pointerleave", release);
+    }
+
     window.addEventListener("keydown", (e) => {
       if (["ArrowLeft", "ArrowRight", "Space"].includes(e.code)) {
         e.preventDefault();
@@ -445,6 +517,10 @@ VERTICAL SPEED     ${Math.abs(vSpeed)} ${vSpeed < 0 ? "^" : "v"}`;
     window.addEventListener("keyup", (e) => {
       state.keys.delete(e.code);
     });
+
+    bindTouchButton("btn-left", "ArrowLeft");
+    bindTouchButton("btn-right", "ArrowRight");
+    bindTouchButton("btn-thrust", "Space");
 
     buildTerrain();
     buildStars();
