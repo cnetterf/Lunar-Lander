@@ -118,6 +118,7 @@
       place-items: center;
       user-select: none;
       touch-action: none;
+      -webkit-tap-highlight-color: transparent;
     }
     .touch-btn:active {
       background: rgba(255,255,255,0.15);
@@ -126,6 +127,25 @@
     .touch-center {
       align-self: center;
       pointer-events: auto;
+    }
+    .btn-icon {
+      background-repeat: no-repeat;
+      background-position: center;
+      background-size: 60% 60%;
+    }
+    .btn-left {
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><polygon points='42,12 18,32 42,52' fill='white'/></svg>");
+    }
+    .btn-right {
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><polygon points='22,12 46,32 22,52' fill='white'/></svg>");
+    }
+    .btn-thrust {
+      background-image: url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 140 64'><text x='70' y='42' text-anchor='middle' font-family='Lucida Console, Courier New, monospace' font-size='28' fill='white'>THRUST</text></svg>\");
+      background-size: 85% 85%;
+    }
+    .btn-retry {
+      background-image: url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 140 64'><text x='70' y='42' text-anchor='middle' font-family='Lucida Console, Courier New, monospace' font-size='28' fill='white'>RETRY</text></svg>\");
+      background-size: 85% 85%;
     }
     .rotate-msg {
       position: absolute;
@@ -155,6 +175,8 @@
         position: relative;
         flex: 0 0 70vh;
         width: 100%;
+        padding-top: 24px;
+        box-sizing: border-box;
       }
       #controls-area {
         position: relative;
@@ -168,6 +190,12 @@
       }
       .overlay {
         position: absolute;
+      }
+      .panel,
+      .panel-right {
+        top: 10px;
+        font-size: 12px;
+        line-height: 1.4;
       }
     }
     @media (pointer: coarse) and (orientation: landscape) {
@@ -194,13 +222,13 @@
     <div id="controls-area">
       <div class="touch-controls" id="touch-controls">
         <div class="touch-group">
-          <button class="touch-btn" id="btn-left">◀</button>
+          <button class="touch-btn btn-icon btn-left" id="btn-left" aria-label="Rotate left"></button>
         </div>
         <div class="touch-center">
-          <button class="touch-btn" id="btn-thrust">THRUST</button>
+          <button class="touch-btn btn-icon btn-thrust" id="btn-thrust" aria-label="Thrust"></button>
         </div>
         <div class="touch-group">
-          <button class="touch-btn" id="btn-right">▶</button>
+          <button class="touch-btn btn-icon btn-right" id="btn-right" aria-label="Rotate right"></button>
         </div>
       </div>
     </div>
@@ -213,7 +241,7 @@
     const panelRight = document.getElementById("panel-right");
     const centerMsg = document.getElementById("center-msg");
 
-    const VERSION = "1.4.0";
+    const VERSION = "1.4.2";
 
     const state = {
       width: canvas.width,
@@ -543,11 +571,12 @@ LANDING STATUS     ${status}`;
       update(dt);
       drawFrame();
       updatePanels();
+      updateTouchLabel();
 
       if (state.status === "landed") {
-        showMessage(state.message, "Press R to launch again");
+        showMessage(state.message, "Press RETRY");
       } else if (state.status === "crashed") {
-        showMessage("CRASH", "Press R to retry");
+        showMessage("CRASH", "Press RETRY");
       } else {
         hideMessage();
       }
@@ -583,6 +612,37 @@ LANDING STATUS     ${status}`;
       btn.addEventListener("pointerleave", release);
     }
 
+    function bindThrustOrRetry() {
+      const btn = document.getElementById("btn-thrust");
+      if (!btn) return;
+      const press = (e) => {
+        e.preventDefault();
+        if (state.status !== "flying") {
+          resetLander();
+          return;
+        }
+        state.keys.add("Space");
+        btn.setPointerCapture?.(e.pointerId);
+      };
+      const release = (e) => {
+        e.preventDefault();
+        state.keys.delete("Space");
+      };
+      btn.addEventListener("pointerdown", press);
+      btn.addEventListener("pointerup", release);
+      btn.addEventListener("pointercancel", release);
+      btn.addEventListener("pointerleave", release);
+    }
+
+    function updateTouchLabel() {
+      const btn = document.getElementById("btn-thrust");
+      if (!btn) return;
+      const isFlying = state.status === "flying";
+      btn.classList.toggle("btn-thrust", isFlying);
+      btn.classList.toggle("btn-retry", !isFlying);
+      btn.setAttribute("aria-label", isFlying ? "Thrust" : "Retry");
+    }
+
     window.addEventListener("keydown", (e) => {
       if (["ArrowLeft", "ArrowRight", "Space"].includes(e.code)) {
         e.preventDefault();
@@ -599,7 +659,7 @@ LANDING STATUS     ${status}`;
 
     bindTouchButton("btn-left", "ArrowLeft");
     bindTouchButton("btn-right", "ArrowRight");
-    bindTouchButton("btn-thrust", "Space");
+    bindThrustOrRetry();
 
     buildTerrain();
     buildStars();
