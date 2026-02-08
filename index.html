@@ -82,6 +82,7 @@
       text-shadow: 0 0 8px rgba(255,255,255,0.15);
       opacity: 0;
       transition: opacity 200ms ease;
+      transform: translateY(20%);
     }
     .center-msg.visible {
       opacity: 1;
@@ -179,7 +180,7 @@
         position: relative;
         flex: 0 0 70vh;
         width: 100%;
-        padding-top: 70px;
+        --hud-height: 90px;
         box-sizing: border-box;
       }
       #controls-area {
@@ -190,8 +191,8 @@
       }
       canvas {
         width: 100%;
-        height: calc(100% - 70px);
-        margin-top: 70px;
+        height: calc(100% - var(--hud-height));
+        margin-top: var(--hud-height);
       }
       .overlay {
         position: absolute;
@@ -246,7 +247,7 @@
     const panelRight = document.getElementById("panel-right");
     const centerMsg = document.getElementById("center-msg");
 
-    const VERSION = "1.4.3";
+    const VERSION = "1.5.0";
 
     const state = {
       width: canvas.width,
@@ -271,6 +272,8 @@
       gravity: 28,
       rotateSpeed: 2.4,
       thrust: 40,
+      thrustStepInterval: 0.25,
+      thrustStepMax: 5,
       burstImpulse: 14,
       fuelBurnBurst: 3,
       fuelBurnPerSecond: 9,
@@ -411,7 +414,11 @@
         }
 
         if (state.thrusting && state.fuel > 0) {
-          const accel = config.thrust;
+          const steps = Math.min(
+            config.thrustStepMax,
+            1 + Math.floor(state.thrustHeldTime / config.thrustStepInterval)
+          );
+          const accel = config.thrust * steps;
           lander.vx += Math.sin(lander.angle) * accel * dt;
           lander.vy += Math.cos(lander.angle) * -accel * dt;
           const burn = config.fuelBurnPerSecond * dt;
@@ -523,11 +530,15 @@
       const altitude = Math.max(0, Math.round(groundHeightAt(lander.x) - lander.y));
       const hSpeed = Math.round(lander.vx);
       const vSpeed = Math.round(lander.vy);
+      const leftValue = (value, width = 4) => String(value).padStart(width, "0");
+      const rightLabel = (label, width = 14) => label.padStart(width, " ");
+      const rightValue = (value, width = 4) => String(value).padStart(width, " ");
+
       panelLeft.textContent =
-`VER       ${VERSION}
-SCORE     ${state.score.toString().padStart(4, "0")}
-TIME      ${state.time.toFixed(1).padStart(4, "0")}
-FUEL      ${Math.max(0, Math.round(state.fuel)).toString().padStart(4, "0")}`;
+`VER ${VERSION}
+SCORE ${leftValue(state.score)}
+TIME ${state.time.toFixed(1).padStart(4, "0")}
+FUEL ${leftValue(Math.max(0, Math.round(state.fuel)))}`;
       const angleDeg = Math.round(lander.angle * (180 / Math.PI));
       const pad = inPad(lander);
       const okAngle = Math.abs(lander.angle) <= config.safeAngle;
@@ -538,12 +549,12 @@ FUEL      ${Math.max(0, Math.round(state.fuel)).toString().padStart(4, "0")}`;
       const status = okAll ? "SAFE" : "UNSAFE";
 
       panelRight.textContent =
-`ALTITUDE           ${altitude}
-HORIZ SPEED        ${Math.abs(hSpeed)} ${hSpeed < 0 ? "<" : ">"}
-VERT SPEED         ${Math.abs(vSpeed)} ${vSpeed < 0 ? "^" : "v"}
-ANGLE (DEG)        ${angleDeg}
-PAD CONTACT        ${okPad ? "YES" : "NO "}
-LANDING            ${status}`;
+`${rightLabel("ALTITUDE")} ${rightValue(altitude, 5)}
+${rightLabel("HORIZ SPEED")} ${rightValue(Math.abs(hSpeed))} ${hSpeed < 0 ? "<" : ">"}
+${rightLabel("VERT SPEED")} ${rightValue(Math.abs(vSpeed))} ${vSpeed < 0 ? "^" : "v"}
+${rightLabel("ANGLE (DEG)")} ${rightValue(angleDeg, 4)}
+${rightLabel("PAD CONTACT")} ${rightValue(okPad ? "YES" : "NO ", 3)}
+${rightLabel("LANDING")} ${rightValue(status, 6)}`;
     }
 
     function drawFrame() {
