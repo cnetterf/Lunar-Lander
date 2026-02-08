@@ -63,7 +63,7 @@
     .panel-right {
       position: absolute;
       top: 18px;
-      right: 18px;
+      right: 28px;
       text-align: right;
       font-size: 14px;
       line-height: 1.5;
@@ -247,7 +247,7 @@
     const panelRight = document.getElementById("panel-right");
     const centerMsg = document.getElementById("center-msg");
 
-    const VERSION = "1.5.0";
+    const VERSION = "1.5.1";
 
     const state = {
       width: canvas.width,
@@ -271,9 +271,9 @@
     const config = {
       gravity: 28,
       rotateSpeed: 2.4,
-      thrust: 40,
+      thrust: 38,
       thrustStepInterval: 0.25,
-      thrustStepMax: 5,
+      thrustStepMax: 4,
       burstImpulse: 14,
       fuelBurnBurst: 3,
       fuelBurnPerSecond: 9,
@@ -282,7 +282,11 @@
       safeAngle: Math.PI / 10,
     };
 
+    const showDebug = false;
+    const isCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
+
     function resetLander() {
+      buildTerrain();
       state.lander = {
         x: state.width * 0.5,
         y: 160,
@@ -548,13 +552,17 @@ FUEL ${leftValue(Math.max(0, Math.round(state.fuel)))}`;
       const okAll = okAngle && okV && okH && okPad;
       const status = okAll ? "SAFE" : "UNSAFE";
 
-      panelRight.textContent =
+      panelRight.textContent = showDebug ?
 `${rightLabel("ALTITUDE")} ${rightValue(altitude, 5)}
 ${rightLabel("HORIZ SPEED")} ${rightValue(Math.abs(hSpeed))} ${hSpeed < 0 ? "<" : ">"}
 ${rightLabel("VERT SPEED")} ${rightValue(Math.abs(vSpeed))} ${vSpeed < 0 ? "^" : "v"}
 ${rightLabel("ANGLE (DEG)")} ${rightValue(angleDeg, 4)}
 ${rightLabel("PAD CONTACT")} ${rightValue(okPad ? "YES" : "NO ", 3)}
-${rightLabel("LANDING")} ${rightValue(status, 6)}`;
+${rightLabel("LANDING")} ${rightValue(status, 6)}` :
+`${rightLabel("ALTITUDE")} ${rightValue(altitude, 5)}
+${rightLabel("HORIZ SPEED")} ${rightValue(Math.abs(hSpeed))} ${hSpeed < 0 ? "<" : ">"}
+${rightLabel("VERT SPEED")} ${rightValue(Math.abs(vSpeed))} ${vSpeed < 0 ? "^" : "v"}
+${rightLabel("ANGLE (DEG)")} ${rightValue(angleDeg, 4)}`;
     }
 
     function drawFrame() {
@@ -590,9 +598,9 @@ ${rightLabel("LANDING")} ${rightValue(status, 6)}`;
       updateTouchLabel();
 
       if (state.status === "landed") {
-        showMessage(state.message, "Press RETRY");
+        showMessage(state.message, isCoarsePointer ? "Press RETRY" : "Press R to retry");
       } else if (state.status === "crashed") {
-        showMessage("CRASH", "Press RETRY");
+        showMessage("CRASH", isCoarsePointer ? "Press RETRY" : "Press R to retry");
       } else {
         hideMessage();
       }
