@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lunar Lander Classic</title>
+  <style>
+    :root {
+      --bg: #000;
+      --fg: #e6e6e6;
+      --dim: #9aa0a6;
+      --accent: #f5f5f5;
+      --warn: #ff5252;
+      --ok: #7dff7d;
+    }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: "Lucida Console", "Courier New", monospace;
+      letter-spacing: 0.5px;
+      overflow: hidden;
+    }
+    #wrap {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: grid;
+      place-items: center;
+    }
+    canvas {
+      width: 100vw;
+      height: 100vh;
+      image-rendering: pixelated;
+    }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    .panel {
+      position: absolute;
+      top: 18px;
+      left: 18px;
+      font-size: 14px;
+      line-height: 1.5;
+      white-space: pre;
+    }
+    .panel-right {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      text-align: right;
+      font-size: 14px;
+      line-height: 1.5;
+      white-space: pre;
+    }
+    .center-msg {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      font-size: 16px;
+      color: var(--fg);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      text-shadow: 0 0 8px rgba(255,255,255,0.15);
+      opacity: 0;
+      transition: opacity 200ms ease;
+    }
+    .center-msg.visible {
+      opacity: 1;
+    }
+    .hint {
+      margin-top: 10px;
+      color: var(--dim);
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <canvas id="game" width="1024" height="768"></canvas>
+    <div class="overlay">
+      <div class="panel" id="panel-left"></div>
+      <div class="panel-right" id="panel-right"></div>
+      <div class="center-msg" id="center-msg"></div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+    const panelLeft = document.getElementById("panel-left");
+    const panelRight = document.getElementById("panel-right");
+    const centerMsg = document.getElementById("center-msg");
+
+    const state = {
+      width: canvas.width,
+      height: canvas.height,
+      keys: new Set(),
+      lastTime: 0,
+      running: true,
+      score: 0,
+      time: 0,
+      fuel: 450,
+      thrusting: false,
+      thrustHeldTime: 0,
+      terrain: [],
+      pads: [],
+      stars: [],
+      lander: null,
+      status: "flying",
+      message: "",
+    };
+
+    const config = {
+      gravity: 28,
+      rotateSpeed: 2.4,
+      thrust: 40,
+      burstImpulse: 14,
+      fuelBurnBurst: 3,
+      fuelBurnPerSecond: 9,
+      safeVSpeed: 12,
+      safeHSpeed: 10,
+      safeAngle: Math.PI / 10,
+    };
+
+    function resetLander() {
+      state.lander = {
+        x: state.width * 0.5,
+        y: 160,
+        vx: 10 - Math.random() * 20,
+        vy: 0,
+        angle: 0,
+        radius: 12,
+      };
+      state.fuel = 450;
+      state.time = 0;
+      state.thrustHeldTime = 0;
+      state.thrusting = false;
+      state.status = "flying";
+      state.message = "";
+    }
+
+    function buildTerrain() {
+      state.terrain = [];
+      state.pads = [];
+      const segments = 18;
+      const padding = 60;
+      const maxHeight = state.height - 80;
+      const minHeight = state.height - 240;
+      const step = (state.width - padding * 2) / segments;
+      let x = padding;
+      let y = minHeight + Math.random() * 120;
+      state.terrain.push({ x, y });
+
+      for (let i = 1; i <= segments; i++) {
+        x += step;
+        const delta = (Math.random() - 0.5) * 140;
+        y = Math.min(maxHeight, Math.max(minHeight, y + delta));
+        state.terrain.push({ x, y });
+      }
+
+      const padIndices = [Math.floor(segments * 0.45), Math.floor(segments * 0.78)];
+      padIndices.forEach((idx, i) => {
+        const left = state.terrain[idx];
+        const right = state.terrain[idx + 1];
+        const padY = Math.min(left.y, right.y) - 6;
+        const padWidth = 90 + i * 20;
+        const padLeftX = (left.x + right.x) / 2 - padWidth / 2;
+        const padRightX = padLeftX + padWidth;
+        state.pads.push({ x1: padLeftX, x2: padRightX, y: padY, mult: i === 0 ? 4 : 2 });
+      });
+    }
+
+    function buildStars() {
+      state.stars = [];
+      const count = 90;
+      for (let i = 0; i < count; i++) {
+        state.stars.push({
+          x: Math.random() * state.width,
+          y: Math.random() * state.height * 0.7,
+          a: 0.3 + Math.random() * 0.7,
+          r: Math.random() < 0.1 ? 2 : 1,
+        });
+      }
+    }
+
+    function groundHeightAt(x) {
+      const pts = state.terrain;
+      if (x <= pts[0].x) return pts[0].y;
+      if (x >= pts[pts.length - 1].x) return pts[pts.length - 1].y;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const a = pts[i];
+        const b = pts[i + 1];
+        if (x >= a.x && x <= b.x) {
+          const t = (x - a.x) / (b.x - a.x);
+          return a.y + (b.y - a.y) * t;
+        }
+      }
+      return state.height;
+    }
+
+    function inPad(lander) {
+      for (const pad of state.pads) {
+        if (lander.x >= pad.x1 && lander.x <= pad.x2) {
+          const y = pad.y;
+          if (Math.abs(lander.y + lander.radius - y) <= 6) {
+            return pad;
+          }
+        }
+      }
+      return null;
+    }
+
+    function resolveLanding() {
+      const lander = state.lander;
+      const pad = inPad(lander);
+      const safeAngle = Math.abs(lander.angle) <= config.safeAngle;
+      const safeV = Math.abs(lander.vy) <= config.safeVSpeed;
+      const safeH = Math.abs(lander.vx) <= config.safeHSpeed;
+
+      if (pad && safeAngle && safeV && safeH) {
+        state.status = "landed";
+        const bonus = Math.round((config.safeVSpeed - Math.abs(lander.vy)) * 10);
+        state.score += Math.max(0, bonus) * pad.mult;
+        state.message = `LANDED  x${pad.mult}`;
+      } else {
+        state.status = "crashed";
+        state.message = "CRASH";
+      }
+    }
+
+    function update(dt) {
+      if (state.status !== "flying") return;
+
+      const lander = state.lander;
+
+      if (state.keys.has("ArrowLeft")) {
+        lander.angle -= config.rotateSpeed * dt;
+      }
+      if (state.keys.has("ArrowRight")) {
+        lander.angle += config.rotateSpeed * dt;
+      }
+
+      if (state.keys.has("Space") && state.fuel > 0) {
+        if (!state.thrusting) {
+          const impulse = config.burstImpulse;
+          lander.vx += Math.sin(lander.angle) * -impulse;
+          lander.vy += Math.cos(lander.angle) * -impulse;
+          state.fuel = Math.max(0, state.fuel - config.fuelBurnBurst);
+          state.thrusting = true;
+          state.thrustHeldTime = 0;
+        } else {
+          state.thrustHeldTime += dt;
+        }
+
+        if (state.thrusting && state.fuel > 0) {
+          const accel = config.thrust;
+          lander.vx += Math.sin(lander.angle) * -accel * dt;
+          lander.vy += Math.cos(lander.angle) * -accel * dt;
+          const burn = config.fuelBurnPerSecond * dt;
+          state.fuel = Math.max(0, state.fuel - burn);
+        }
+      } else {
+        state.thrusting = false;
+        state.thrustHeldTime = 0;
+      }
+
+      lander.vy += config.gravity * dt;
+      lander.x += lander.vx * dt;
+      lander.y += lander.vy * dt;
+
+      if (lander.x < 20) {
+        lander.x = 20;
+        lander.vx *= -0.2;
+      }
+      if (lander.x > state.width - 20) {
+        lander.x = state.width - 20;
+        lander.vx *= -0.2;
+      }
+
+      if (lander.y < 20) {
+        lander.y = 20;
+        lander.vy = 0;
+      }
+
+      const groundY = groundHeightAt(lander.x);
+      if (lander.y + lander.radius >= groundY) {
+        lander.y = groundY - lander.radius;
+        resolveLanding();
+      }
+    }
+
+    function drawTerrain() {
+      ctx.strokeStyle = "#e6e6e6";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(state.terrain[0].x, state.terrain[0].y);
+      for (const pt of state.terrain) {
+        ctx.lineTo(pt.x, pt.y);
+      }
+      ctx.stroke();
+
+      ctx.strokeStyle = "#ffffff";
+      ctx.setLineDash([5, 4]);
+      for (const pad of state.pads) {
+        ctx.beginPath();
+        ctx.moveTo(pad.x1, pad.y);
+        ctx.lineTo(pad.x2, pad.y);
+        ctx.stroke();
+
+        ctx.setLineDash([]);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "12px 'Lucida Console', monospace";
+        ctx.fillText(`${pad.mult}X`, (pad.x1 + pad.x2) / 2 - 10, pad.y - 8);
+        ctx.setLineDash([5, 4]);
+      }
+      ctx.setLineDash([]);
+    }
+
+    function drawLander() {
+      const { x, y, angle } = state.lander;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1.5;
+
+      ctx.beginPath();
+      ctx.arc(0, 0, 7, Math.PI * 0.2, Math.PI * 1.8);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(-7, 0);
+      ctx.lineTo(-12, 10);
+      ctx.lineTo(12, 10);
+      ctx.lineTo(7, 0);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(-9, 12);
+      ctx.lineTo(-16, 18);
+      ctx.moveTo(9, 12);
+      ctx.lineTo(16, 18);
+      ctx.stroke();
+
+      if (state.thrusting && state.fuel > 0) {
+        ctx.beginPath();
+        ctx.moveTo(-5, 12);
+        ctx.lineTo(0, 26 + Math.random() * 6);
+        ctx.lineTo(5, 12);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function drawStars() {
+      for (const s of state.stars) {
+        ctx.fillStyle = `rgba(255,255,255,${s.a})`;
+        ctx.fillRect(s.x, s.y, s.r, s.r);
+      }
+    }
+
+    function updatePanels() {
+      const lander = state.lander;
+      const altitude = Math.max(0, Math.round(groundHeightAt(lander.x) - lander.y));
+      const hSpeed = Math.round(lander.vx);
+      const vSpeed = Math.round(lander.vy);
+      panelLeft.textContent =
+`SCORE   ${state.score.toString().padStart(4, "0")}
+TIME    ${state.time.toFixed(1).padStart(4, "0")}
+FUEL    ${Math.max(0, Math.round(state.fuel)).toString().padStart(4, "0")}`;
+      panelRight.textContent =
+`ALTITUDE           ${altitude}
+HORIZONTAL SPEED   ${Math.abs(hSpeed)} ${hSpeed < 0 ? "<" : ">"}
+VERTICAL SPEED     ${Math.abs(vSpeed)} ${vSpeed < 0 ? "^" : "v"}`;
+    }
+
+    function drawFrame() {
+      ctx.clearRect(0, 0, state.width, state.height);
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, state.width, state.height);
+      drawStars();
+      drawTerrain();
+      drawLander();
+    }
+
+    function showMessage(text, extra = "") {
+      centerMsg.innerHTML = `${text}<div class="hint">${extra}</div>`;
+      centerMsg.classList.add("visible");
+    }
+
+    function hideMessage() {
+      centerMsg.classList.remove("visible");
+    }
+
+    function tick(ts) {
+      if (!state.lastTime) state.lastTime = ts;
+      const dt = Math.min(0.05, (ts - state.lastTime) / 1000);
+      state.lastTime = ts;
+
+      if (state.status === "flying") {
+        state.time += dt;
+      }
+
+      update(dt);
+      drawFrame();
+      updatePanels();
+
+      if (state.status === "landed") {
+        showMessage(state.message, "Press R to launch again");
+      } else if (state.status === "crashed") {
+        showMessage("CRASH", "Press R to retry");
+      } else {
+        hideMessage();
+      }
+
+      requestAnimationFrame(tick);
+    }
+
+    function resize() {
+      const { innerWidth, innerHeight } = window;
+      const scale = Math.min(innerWidth / 1024, innerHeight / 768);
+      canvas.style.width = `${1024 * scale}px`;
+      canvas.style.height = `${768 * scale}px`;
+    }
+
+    window.addEventListener("resize", resize);
+
+    window.addEventListener("keydown", (e) => {
+      if (["ArrowLeft", "ArrowRight", "Space"].includes(e.code)) {
+        e.preventDefault();
+        state.keys.add(e.code);
+      }
+      if (e.code === "KeyR") {
+        resetLander();
+      }
+    });
+
+    window.addEventListener("keyup", (e) => {
+      state.keys.delete(e.code);
+    });
+
+    buildTerrain();
+    buildStars();
+    resetLander();
+    resize();
+    requestAnimationFrame(tick);
+  </script>
+</body>
+</html>
