@@ -151,7 +151,7 @@
     const panelRight = document.getElementById("panel-right");
     const centerMsg = document.getElementById("center-msg");
 
-    const VERSION = "1.1.0";
+    const VERSION = "1.2.0";
 
     const state = {
       width: canvas.width,
@@ -179,8 +179,8 @@
       burstImpulse: 14,
       fuelBurnBurst: 3,
       fuelBurnPerSecond: 9,
-      safeVSpeed: 12,
-      safeHSpeed: 10,
+      safeVSpeed: 50,
+      safeHSpeed: 25,
       safeAngle: Math.PI / 10,
     };
 
@@ -434,10 +434,22 @@
 SCORE   ${state.score.toString().padStart(4, "0")}
 TIME    ${state.time.toFixed(1).padStart(4, "0")}
 FUEL    ${Math.max(0, Math.round(state.fuel)).toString().padStart(4, "0")}`;
+      const angleDeg = Math.round(lander.angle * (180 / Math.PI));
+      const pad = inPad(lander);
+      const okAngle = Math.abs(lander.angle) <= config.safeAngle;
+      const okV = Math.abs(lander.vy) <= config.safeVSpeed;
+      const okH = Math.abs(lander.vx) <= config.safeHSpeed;
+      const okPad = Boolean(pad);
+      const okAll = okAngle && okV && okH && okPad;
+      const status = okAll ? "SAFE" : "UNSAFE";
+
       panelRight.textContent =
 `ALTITUDE           ${altitude}
 HORIZONTAL SPEED   ${Math.abs(hSpeed)} ${hSpeed < 0 ? "<" : ">"}
-VERTICAL SPEED     ${Math.abs(vSpeed)} ${vSpeed < 0 ? "^" : "v"}`;
+VERTICAL SPEED     ${Math.abs(vSpeed)} ${vSpeed < 0 ? "^" : "v"}
+ANGLE (DEG)        ${angleDeg}
+PAD CONTACT        ${okPad ? "YES" : "NO "}
+LANDING STATUS     ${status}`;
     }
 
     function drawFrame() {
