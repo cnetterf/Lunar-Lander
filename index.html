@@ -151,6 +151,8 @@
     const panelRight = document.getElementById("panel-right");
     const centerMsg = document.getElementById("center-msg");
 
+    const VERSION = "1.1.0";
+
     const state = {
       width: canvas.width,
       height: canvas.height,
@@ -226,6 +228,8 @@
         const padWidth = 90 + i * 20;
         const padLeftX = (left.x + right.x) / 2 - padWidth / 2;
         const padRightX = padLeftX + padWidth;
+        left.y = padY;
+        right.y = padY;
         state.pads.push({ x1: padLeftX, x2: padRightX, y: padY, mult: i === 0 ? 4 : 2 });
       });
     }
@@ -426,7 +430,8 @@
       const hSpeed = Math.round(lander.vx);
       const vSpeed = Math.round(lander.vy);
       panelLeft.textContent =
-`SCORE   ${state.score.toString().padStart(4, "0")}
+`VER     ${VERSION}
+SCORE   ${state.score.toString().padStart(4, "0")}
 TIME    ${state.time.toFixed(1).padStart(4, "0")}
 FUEL    ${Math.max(0, Math.round(state.fuel)).toString().padStart(4, "0")}`;
       panelRight.textContent =
