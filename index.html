@@ -303,7 +303,7 @@
       if (state.keys.has("Space") && state.fuel > 0) {
         if (!state.thrusting) {
           const impulse = config.burstImpulse;
-          lander.vx += Math.sin(lander.angle) * -impulse;
+          lander.vx += Math.sin(lander.angle) * impulse;
           lander.vy += Math.cos(lander.angle) * -impulse;
           state.fuel = Math.max(0, state.fuel - config.fuelBurnBurst);
           state.thrusting = true;
@@ -314,7 +314,7 @@
 
         if (state.thrusting && state.fuel > 0) {
           const accel = config.thrust;
-          lander.vx += Math.sin(lander.angle) * -accel * dt;
+          lander.vx += Math.sin(lander.angle) * accel * dt;
           lander.vy += Math.cos(lander.angle) * -accel * dt;
           const burn = config.fuelBurnPerSecond * dt;
           state.fuel = Math.max(0, state.fuel - burn);
